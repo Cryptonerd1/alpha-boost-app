@@ -1,217 +1,251 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 
 const GREEN = '#22c55e';
+const BLACK = '#111827';
+const GREY = '#6b7280';
+const BORDER = '#e5e7eb';
+const WHITE = '#ffffff';
+const LIGHT = '#f9fafb';
 
-const MOCK_LOGS = [
-  { date: 'Today', duration: 14, erection: 4, confidence: 4, energy: 3 },
-  { date: 'May 2', duration: 11, erection: 3, confidence: 3, energy: 4 },
-  { date: 'Apr 30', duration: 9, erection: 3, confidence: 3, energy: 3 },
-  { date: 'Apr 28', duration: 7, erection: 2, confidence: 2, energy: 2 },
-  { date: 'Apr 25', duration: 5, erection: 2, confidence: 2, energy: 3 },
-];
+const WEEKS = ['6M', '30D', '7D', 'ALL'];
 
-const RatingButtons = ({ value, onChange, max = 5 }) => (
-  <View style={styles.ratingRow}>
-    {Array.from({ length: max }, (_, i) => i + 1).map(i => (
-      <TouchableOpacity key={i} style={[styles.ratingBtn, value >= i && styles.ratingBtnActive]} onPress={() => onChange(i)}>
-        <Text style={[styles.ratingBtnText, value >= i && styles.ratingBtnTextActive]}>{i}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-);
+const MOCK_SCORES = [62, 58, 71, 74, 68, 80, 82, 76, 85, 88, 84, 90, 87, 91, 94, 89, 92, 96, 93, 97, 95, 98, 96, 99, 97, 100, 98, 100, 99, 100];
 
 export default function PerformanceLogScreen() {
-  const [logs, setLogs] = useState(MOCK_LOGS);
-  const [showAdd, setShowAdd] = useState(false);
-  const [duration, setDuration] = useState(10);
-  const [erection, setErection] = useState(3);
-  const [confidence, setConfidence] = useState(3);
-  const [energy, setEnergy] = useState(3);
+  const [activeWeek, setActiveWeek] = useState(1);
+  const [alphaScore] = useState(88);
+  const [goalScore] = useState(100);
+  const [streak] = useState(21);
 
-  const avgDuration = (logs.reduce((a, l) => a + l.duration, 0) / logs.length).toFixed(1);
-  const firstDuration = logs[logs.length - 1].duration;
-  const improvement = Math.round(((logs[0].duration - firstDuration) / firstDuration) * 100);
+  const today = new Date();
+  const calDays = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (29 - i));
+    return { date: d.getDate(), score: MOCK_SCORES[i], active: i >= 16 };
+  });
 
-  const addLog = () => {
-    setLogs([{ date: 'Just now', duration, erection, confidence, energy }, ...logs]);
-    setShowAdd(false);
-  };
+  const factors = [
+    { label: 'Nutrition', score: 92, max: 25, color: GREEN },
+    { label: 'Sleep', score: 85, max: 20, color: '#3b82f6' },
+    { label: 'Exercise', score: 90, max: 20, color: '#f59e0b' },
+    { label: 'Hydration', score: 70, max: 10, color: '#06b6d4' },
+    { label: 'Kegels', score: 100, max: 10, color: '#8b5cf6' },
+    { label: 'Stress', score: 60, max: 10, color: '#f43f5e' },
+    { label: 'No Alcohol', score: 100, max: 5, color: GREEN },
+  ];
+
+  const scoreColor = (s) => s >= 80 ? GREEN : s >= 50 ? '#f59e0b' : '#ef4444';
 
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Performance Log</Text>
-          <Text style={styles.headerSub}>Private and encrypted. Only you see this.</Text>
-        </View>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{improvement}%</Text>
-            <Text style={styles.statLabel}>Improvement</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{avgDuration}m</Text>
-            <Text style={styles.statLabel}>Avg Duration</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{logs.length}</Text>
-            <Text style={styles.statLabel}>Sessions</Text>
-          </View>
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Progress</Text>
+        <Text style={styles.headerSub}>Day 21 of 30 · Complete Reset Program</Text>
+      </View>
 
-        <View style={styles.trendCard}>
-          <Text style={styles.sectionTitle}>Duration Trend</Text>
-          <View style={styles.chart}>
-            {[...logs].reverse().map((log, i) => {
-              const maxDur = Math.max(...logs.map(l => l.duration));
-              const barHeight = (log.duration / maxDur) * 80;
-              return (
-                <View key={i} style={styles.chartBar}>
-                  <Text style={styles.chartBarValue}>{log.duration}m</Text>
-                  <View style={[styles.bar, { height: barHeight, backgroundColor: i === logs.length - 1 ? GREEN : '#bbf7d0' }]} />
-                  <Text style={styles.chartBarDate}>{log.date.slice(0, 6)}</Text>
-                </View>
-              );
-            })}
-          </View>
-          <Text style={styles.trendNote}>
-            {improvement > 0 ? `✓ Your duration has increased ${improvement}% since you started.` : 'Keep logging — your trend will appear here.'}
-          </Text>
+      {/* Score + Streak Card */}
+      <View style={styles.topCard}>
+        <View style={styles.topCardLeft}>
+          <Text style={styles.topCardLabel}>Alpha Score</Text>
+          <Text style={styles.topCardScore}>{alphaScore}</Text>
+          <Text style={styles.topCardGoal}>Goal: {goalScore}</Text>
+          <TouchableOpacity style={styles.logTodayBtn}>
+            <Text style={styles.logTodayText}>Log today →</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.logsSection}>
-          <Text style={styles.sectionTitle}>Session History</Text>
-          {logs.map((log, i) => (
-            <View key={i} style={styles.logCard}>
-              <View style={styles.logLeft}>
-                <Text style={styles.logDate}>{log.date}</Text>
-                <Text style={styles.logDuration}>{log.duration} min</Text>
+        <View style={styles.topCardRight}>
+          <Text style={styles.streakFire}>🔥</Text>
+          <Text style={styles.streakNum}>{streak}</Text>
+          <Text style={styles.streakLabel}>Day Streak</Text>
+          {/* Mini calendar dots */}
+          <View style={styles.streakDots}>
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <View key={i} style={styles.streakDotCol}>
+                <Text style={styles.streakDotDay}>{d}</Text>
+                <View style={[styles.streakDot, i < 5 && styles.streakDotActive]} />
               </View>
-              <View style={styles.logMetrics}>
-                <View style={styles.logMetric}>
-                  <Text style={styles.logMetricLabel}>Erection</Text>
-                  <View style={styles.logDots}>
-                    {[1,2,3,4,5].map(d => <View key={d} style={[styles.dot, d <= log.erection && styles.dotActive]} />)}
-                  </View>
-                </View>
-                <View style={styles.logMetric}>
-                  <Text style={styles.logMetricLabel}>Confidence</Text>
-                  <View style={styles.logDots}>
-                    {[1,2,3,4,5].map(d => <View key={d} style={[styles.dot, d <= log.confidence && styles.dotActive]} />)}
-                  </View>
-                </View>
-                <View style={styles.logMetric}>
-                  <Text style={styles.logMetricLabel}>Energy</Text>
-                  <View style={styles.logDots}>
-                    {[1,2,3,4,5].map(d => <View key={d} style={[styles.dot, d <= log.energy && styles.dotActive]} />)}
-                  </View>
-                </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Alpha Score Trend */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Alpha Score trend</Text>
+          <View style={styles.weekTabs}>
+            {WEEKS.map((w, i) => (
+              <TouchableOpacity key={i} style={[styles.weekTab, activeWeek === i && styles.weekTabActive]} onPress={() => setActiveWeek(i)}>
+                <Text style={[styles.weekTabText, activeWeek === i && styles.weekTabTextActive]}>{w}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Simple Bar Chart */}
+        <View style={styles.chartArea}>
+          <View style={styles.chartBars}>
+            {calDays.slice(-14).map((d, i) => (
+              <View key={i} style={styles.barCol}>
+                <View style={[styles.bar, { height: `${d.score}%`, backgroundColor: d.active ? GREEN : '#e5e7eb' }]} />
+                <Text style={styles.barLabel}>{d.date}</Text>
               </View>
+            ))}
+          </View>
+          <Text style={styles.chartCaption}>🟢 Great job! 21 days consistent and climbing.</Text>
+        </View>
+      </View>
+
+      {/* 30-Day Calendar */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>30-day calendar</Text>
+        <View style={styles.calendar}>
+          {calDays.map((d, i) => (
+            <View key={i} style={[styles.calDay, { backgroundColor: d.active ? scoreColor(d.score) : '#f3f4f6' }]}>
+              <Text style={[styles.calDayNum, { color: d.active ? '#fff' : GREY }]}>{d.date}</Text>
             </View>
           ))}
         </View>
-        <View style={{ height: 100 }} />
-      </ScrollView>
+        <View style={styles.calLegend}>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: GREEN }]} /><Text style={styles.legendText}>80-100</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} /><Text style={styles.legendText}>50-79</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} /><Text style={styles.legendText}>0-49</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#f3f4f6' }]} /><Text style={styles.legendText}>No log</Text></View>
+        </View>
+      </View>
 
-      <TouchableOpacity style={styles.fab} onPress={() => setShowAdd(true)}>
-        <Text style={styles.fabText}>+ Log Session</Text>
-      </TouchableOpacity>
+      {/* Factor Breakdown */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Score breakdown</Text>
+        {factors.map((f, i) => (
+          <View key={i} style={styles.factorRow}>
+            <Text style={styles.factorLabel}>{f.label}</Text>
+            <View style={styles.factorBarBg}>
+              <View style={[styles.factorBar, { width: `${f.score}%`, backgroundColor: f.color }]} />
+            </View>
+            <Text style={[styles.factorScore, { color: f.color }]}>{f.score}</Text>
+          </View>
+        ))}
+      </View>
 
-      <Modal visible={showAdd} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAdd(false)}>
-        <View style={styles.modal}>
-          <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Log Session</Text>
-          <Text style={styles.modalSub}>Honest data = better insights. This stays private.</Text>
+      {/* Before/After Compare */}
+      <View style={styles.compareCard}>
+        <Text style={styles.comparTitle}>Watch yourself change</Text>
+        <Text style={styles.comparSub}>Your performance score then vs now</Text>
+        <View style={styles.compareRow}>
+          <View style={styles.compareBox}>
+            <Text style={styles.compareScore} style={{ fontSize: 36, fontWeight: '900', color: '#ef4444' }}>44</Text>
+            <Text style={styles.compareDate}>Day 1 · May 1</Text>
+            <Text style={styles.compareLabel}>Before</Text>
+          </View>
+          <Text style={styles.compareArrow}>→</Text>
+          <View style={styles.compareBox}>
+            <Text style={{ fontSize: 36, fontWeight: '900', color: GREEN }}>88</Text>
+            <Text style={styles.compareDate}>Day 21 · May 21</Text>
+            <Text style={styles.compareLabel}>Now</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.shareBtn}>
+          <Text style={styles.shareBtnText}>⬆ Share your progress</Text>
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Duration (minutes)</Text>
-            <View style={styles.durationRow}>
-              <TouchableOpacity style={styles.durationBtn} onPress={() => setDuration(Math.max(1, duration - 1))}>
-                <Text style={styles.durationBtnText}>−</Text>
-              </TouchableOpacity>
-              <Text style={styles.durationValue}>{duration}</Text>
-              <TouchableOpacity style={styles.durationBtn} onPress={() => setDuration(duration + 1)}>
-                <Text style={styles.durationBtnText}>+</Text>
-              </TouchableOpacity>
+      {/* Daily Log Entry */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Log today</Text>
+        {[
+          { label: 'Hours of sleep', emoji: '😴', unit: 'hours', done: true },
+          { label: 'Water intake', emoji: '💧', unit: 'liters', done: true },
+          { label: 'Exercise', emoji: '🏋️', unit: 'minutes', done: false },
+          { label: 'Stress level', emoji: '🧠', unit: '/ 10', done: false },
+          { label: 'Alcohol today', emoji: '🚫', unit: 'yes / no', done: true },
+        ].map((item, i) => (
+          <View key={i} style={styles.logItem}>
+            <Text style={styles.logEmoji}>{item.emoji}</Text>
+            <Text style={styles.logLabel}>{item.label}</Text>
+            <View style={[styles.logStatus, { backgroundColor: item.done ? '#dcfce7' : '#f3f4f6' }]}>
+              <Text style={[styles.logStatusText, { color: item.done ? GREEN : GREY }]}>{item.done ? '✓ Done' : item.unit}</Text>
             </View>
           </View>
+        ))}
+      </View>
 
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Erection Quality (1-5)</Text>
-            <RatingButtons value={erection} onChange={setErection} />
-          </View>
-
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Confidence Level (1-5)</Text>
-            <RatingButtons value={confidence} onChange={setConfidence} />
-          </View>
-
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Energy Level (1-5)</Text>
-            <RatingButtons value={energy} onChange={setEnergy} />
-          </View>
-
-          <TouchableOpacity style={styles.saveBtn} onPress={addLog}>
-            <Text style={styles.saveBtnText}>Save Session</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAdd(false)}>
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </View>
+      <View style={{ height: 100 }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9' },
-  header: { padding: 24, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 26, fontWeight: '900', color: '#0a0a0a', letterSpacing: -0.5 },
-  headerSub: { fontSize: 14, color: '#6b7280', marginTop: 4 },
-  statsRow: { flexDirection: 'row', margin: 16, gap: 10 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#e5e7eb' },
-  statNum: { fontSize: 24, fontWeight: '900', color: GREEN, letterSpacing: -0.5 },
-  statLabel: { fontSize: 11, color: '#6b7280', fontWeight: '600', marginTop: 3 },
-  trendCard: { marginHorizontal: 16, backgroundColor: '#fff', borderRadius: 18, padding: 20, marginBottom: 16, borderWidth: 1.5, borderColor: '#e5e7eb' },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#0a0a0a', marginBottom: 16 },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 110, marginBottom: 14 },
-  chartBar: { alignItems: 'center', gap: 4 },
-  chartBarValue: { fontSize: 10, fontWeight: '700', color: '#374151' },
-  bar: { width: 32, borderRadius: 6 },
-  chartBarDate: { fontSize: 9, color: '#9ca3af', fontWeight: '500' },
-  trendNote: { fontSize: 13, color: '#166534', fontWeight: '500', backgroundColor: '#f0fdf4', padding: 12, borderRadius: 10 },
-  logsSection: { marginHorizontal: 16 },
-  logCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1.5, borderColor: '#e5e7eb', flexDirection: 'row', gap: 14 },
-  logLeft: { alignItems: 'center', minWidth: 60 },
-  logDate: { fontSize: 11, color: '#9ca3af', fontWeight: '600', marginBottom: 4 },
-  logDuration: { fontSize: 20, fontWeight: '900', color: GREEN, letterSpacing: -0.5 },
-  logMetrics: { flex: 1, gap: 8 },
-  logMetric: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  logMetricLabel: { fontSize: 12, color: '#6b7280', fontWeight: '500', width: 80 },
-  logDots: { flexDirection: 'row', gap: 4 },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#e5e7eb' },
-  dotActive: { backgroundColor: GREEN },
-  fab: { position: 'absolute', bottom: 24, left: 24, right: 24, backgroundColor: '#0a0a0a', padding: 17, borderRadius: 14 },
-  fabText: { color: '#fff', fontWeight: '800', textAlign: 'center', fontSize: 15 },
-  modal: { flex: 1, backgroundColor: '#fff', padding: 24, paddingTop: 12 },
-  modalHandle: { width: 36, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#0a0a0a', marginBottom: 6 },
-  modalSub: { fontSize: 14, color: '#6b7280', marginBottom: 28, lineHeight: 20 },
-  formSection: { marginBottom: 24 },
-  formLabel: { fontSize: 15, fontWeight: '700', color: '#0a0a0a', marginBottom: 12 },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
-  durationBtn: { width: 48, height: 48, backgroundColor: '#f9f9f9', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#e5e7eb' },
-  durationBtnText: { fontSize: 22, color: '#374151', fontWeight: '600' },
-  durationValue: { fontSize: 36, fontWeight: '900', color: '#0a0a0a', letterSpacing: -1, minWidth: 60, textAlign: 'center' },
-  ratingRow: { flexDirection: 'row', gap: 10 },
-  ratingBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f9f9f9', borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center' },
-  ratingBtnActive: { backgroundColor: '#f0fdf4', borderColor: GREEN },
-  ratingBtnText: { fontSize: 15, fontWeight: '700', color: '#9ca3af' },
-  ratingBtnTextActive: { color: GREEN },
-  saveBtn: { backgroundColor: '#0a0a0a', padding: 17, borderRadius: 14, marginBottom: 10 },
-  saveBtnText: { color: '#fff', fontWeight: '800', textAlign: 'center', fontSize: 15 },
-  cancelBtn: { padding: 14, borderRadius: 12 },
-  cancelBtnText: { color: '#9ca3af', fontWeight: '600', textAlign: 'center' },
+  container: { flex: 1, backgroundColor: WHITE },
+  content: { paddingBottom: 20 },
+  header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+  headerTitle: { fontSize: 28, fontWeight: '900', color: BLACK, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: GREY, marginTop: 3, fontWeight: '500' },
+
+  topCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: BLACK, borderRadius: 20, padding: 22, flexDirection: 'row' },
+  topCardLeft: { flex: 1 },
+  topCardLabel: { fontSize: 11, color: '#9ca3af', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  topCardScore: { fontSize: 58, fontWeight: '900', color: WHITE, letterSpacing: -2, lineHeight: 62 },
+  topCardGoal: { fontSize: 13, color: '#6b7280', marginBottom: 14 },
+  logTodayBtn: { backgroundColor: GREEN, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, alignSelf: 'flex-start' },
+  logTodayText: { color: WHITE, fontWeight: '800', fontSize: 13 },
+  topCardRight: { alignItems: 'center', justifyContent: 'center', paddingLeft: 16 },
+  streakFire: { fontSize: 28, marginBottom: 2 },
+  streakNum: { fontSize: 30, fontWeight: '900', color: WHITE, letterSpacing: -1 },
+  streakLabel: { fontSize: 11, color: '#6b7280', fontWeight: '600', marginBottom: 12 },
+  streakDots: { flexDirection: 'row', gap: 4 },
+  streakDotCol: { alignItems: 'center', gap: 3 },
+  streakDotDay: { fontSize: 8, color: '#6b7280', fontWeight: '600' },
+  streakDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1f2937' },
+  streakDotActive: { backgroundColor: GREEN },
+
+  section: { paddingHorizontal: 16, marginBottom: 20 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: BLACK, marginBottom: 12 },
+  weekTabs: { flexDirection: 'row', gap: 4 },
+  weekTab: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#f3f4f6' },
+  weekTabActive: { backgroundColor: BLACK },
+  weekTabText: { fontSize: 11, fontWeight: '700', color: GREY },
+  weekTabTextActive: { color: WHITE },
+
+  chartArea: { backgroundColor: '#f9fafb', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: BORDER },
+  chartBars: { flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 4, marginBottom: 8 },
+  barCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
+  bar: { width: '80%', borderRadius: 4, minHeight: 4 },
+  barLabel: { fontSize: 8, color: GREY, marginTop: 4, fontWeight: '600' },
+  chartCaption: { fontSize: 12, color: GREEN, fontWeight: '600' },
+
+  calendar: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  calDay: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  calDayNum: { fontSize: 12, fontWeight: '700' },
+  calLegend: { flexDirection: 'row', gap: 14, marginTop: 10, flexWrap: 'wrap' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 11, color: GREY, fontWeight: '500' },
+
+  factorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
+  factorLabel: { width: 90, fontSize: 12, color: GREY, fontWeight: '600' },
+  factorBarBg: { flex: 1, height: 7, backgroundColor: '#f3f4f6', borderRadius: 4, overflow: 'hidden' },
+  factorBar: { height: '100%', borderRadius: 4 },
+  factorScore: { width: 32, fontSize: 12, fontWeight: '900', textAlign: 'right' },
+
+  compareCard: { marginHorizontal: 16, marginBottom: 20, backgroundColor: BLACK, borderRadius: 20, padding: 22 },
+  comparTitle: { fontSize: 18, fontWeight: '900', color: WHITE, marginBottom: 4 },
+  comparSub: { fontSize: 13, color: '#6b7280', marginBottom: 20 },
+  compareRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginBottom: 20 },
+  compareBox: { alignItems: 'center', backgroundColor: '#111827', borderRadius: 14, padding: 16, flex: 1 },
+  compareArrow: { fontSize: 24, color: '#374151', paddingHorizontal: 10 },
+  compareDate: { fontSize: 11, color: '#6b7280', marginTop: 4 },
+  compareLabel: { fontSize: 11, color: '#9ca3af', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 },
+  shareBtn: { backgroundColor: '#1f2937', borderRadius: 12, padding: 14, alignItems: 'center' },
+  shareBtnText: { color: WHITE, fontWeight: '700', fontSize: 14 },
+
+  logItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER, gap: 12 },
+  logEmoji: { fontSize: 22, width: 36, textAlign: 'center' },
+  logLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: BLACK },
+  logStatus: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  logStatusText: { fontSize: 12, fontWeight: '700' },
 });

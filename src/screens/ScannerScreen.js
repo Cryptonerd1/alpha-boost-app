@@ -1,225 +1,304 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Dimensions } from 'react-native';
-import { FOOD_DATABASE } from '../data/foods';
+/**
+ * ScannerScreen
+ *
+ * The AI food scanner. Mirrors Cal AI's camera screen:
+ * - Full dark camera area with "Just snap a pic" headline
+ * - 3 scan modes: Scan Food / Barcode / Food Label
+ * - Result card with Performance Score and breakdown
+ *
+ * In production, the camera integrates with expo-camera
+ * and sends the image to the OpenAI Vision API.
+ * The demo simulates this with a local food database.
+ */
 
-const GREEN = '#22c55e';
-const RED = '#ef4444';
-const { width } = Dimensions.get('window');
+import React, { useState } from 'react';
+import {
+  View, Text, TouchableOpacity, ScrollView,
+  StyleSheet, ActivityIndicator,
+} from 'react-native';
 
-const SAMPLE_FOODS = Object.entries(FOOD_DATABASE).map(([key, val]) => ({ key, ...val }));
+import { FOODS } from '../constants/data';
+import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { getFoodVerdict } from '../utils/scoreCalculator';
+import MetricBar from '../components/MetricBar';
+
+const SCAN_MODES = [
+  { id: 'food',    label: '🍽  Scan Food' },
+  { id: 'barcode', label: '|||  Barcode'  },
+  { id: 'label',   label: '🏷  Food Label' },
+];
 
 export default function ScannerScreen() {
-  const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState(null);
-  const [showResult, setShowResult] = useState(false);
-  const [recentScans, setRecentScans] = useState([]);
+  const [activeModeId, setActiveModeId] = useState('food');
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedFood, setScannedFood] = useState(null);
 
-  const simulateScan = (food) => {
-    setScanning(true);
+  /**
+   * Simulate an AI scan by selecting a food from the local database.
+   * Replace this with a real camera + OpenAI Vision API call in production.
+   */
+  const simulateScan = (foodId) => {
+    const food = FOODS[foodId];
+    if (!food) return;
+
+    setIsScanning(true);
+    setScannedFood(null);
+
+    // Simulate API latency
     setTimeout(() => {
-      setScanning(false);
-      setResult(food);
-      setShowResult(true);
-      setRecentScans(prev => [food, ...prev.slice(0, 4)]);
-    }, 1800);
+      setIsScanning(false);
+      setScannedFood(food);
+    }, 1600);
   };
 
-  const getVerdictStyle = (verdict) => {
-    if (verdict === 'eat_more') return { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' };
-    if (verdict === 'moderation') return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
-    return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
-  };
-
-  const getVerdictLabel = (verdict) => {
-    if (verdict === 'eat_more') return '✓ Eat More';
-    if (verdict === 'moderation') return '◎ In Moderation';
-    return '✗ Avoid';
-  };
-
-  const ScoreBar = ({ label, value, max = 100 }) => {
-    const pct = Math.max(0, Math.min(100, (value / max) * 100));
-    const color = value < 0 ? RED : value > 70 ? GREEN : value > 40 ? '#f59e0b' : RED;
+  if (scannedFood) {
     return (
-      <View style={styles.scoreRow}>
-        <Text style={styles.scoreLabel}>{label}</Text>
-        <View style={styles.scoreBarWrap}>
-          <View style={[styles.scoreBar, { width: `${Math.abs(pct)}%`, backgroundColor: color }]} />
-        </View>
-        <Text style={[styles.scoreVal, { color }]}>{value < 0 ? value : value > 10 ? value : `${value}/10`}</Text>
-      </View>
+      <FoodResultScreen
+        food={scannedFood}
+        onScanAnother={() => setScannedFood(null)}
+      />
     );
-  };
+  }
 
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Food Scanner</Text>
-          <Text style={styles.headerSub}>Scan any food to see its sexual health impact</Text>
-        </View>
-
-        {/* Camera Mock */}
-        <TouchableOpacity
-          style={[styles.cameraBox, scanning && styles.cameraBoxScanning]}
-          onPress={() => !scanning && simulateScan(SAMPLE_FOODS[Math.floor(Math.random() * SAMPLE_FOODS.length)])}
-          activeOpacity={0.85}
-        >
-          {scanning ? (
-            <View style={styles.scanningIndicator}>
-              <Text style={styles.cameraIcon}>⏳</Text>
-              <Text style={styles.scanningText}>Analysing food...</Text>
-              <Text style={styles.scanningSubText}>Checking testosterone, blood flow, nitric oxide...</Text>
-            </View>
-          ) : (
-            <View style={styles.cameraPrompt}>
-              <Text style={styles.cameraIcon}>📸</Text>
-              <Text style={styles.cameraText}>Tap to Scan Food</Text>
-              <Text style={styles.cameraSub}>Point at any food or drink</Text>
-            </View>
-          )}
-          <View style={styles.cornerTL} />
-          <View style={styles.cornerTR} />
-          <View style={styles.cornerBL} />
-          <View style={styles.cornerBR} />
-        </TouchableOpacity>
-
-        {/* Quick Scan from list */}
-        <Text style={styles.orText}>— or select a food to test —</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.foodChips}>
-          {SAMPLE_FOODS.map((f) => (
-            <TouchableOpacity key={f.key} style={styles.foodChip} onPress={() => simulateScan(f)}>
-              <Text style={styles.foodChipEmoji}>{f.emoji}</Text>
-              <Text style={styles.foodChipName}>{f.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Recent Scans */}
-        {recentScans.length > 0 && (
-          <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recent Scans</Text>
-            {recentScans.map((f, i) => {
-              const v = getVerdictStyle(f.verdict);
-              return (
-                <TouchableOpacity key={i} style={styles.recentItem} onPress={() => { setResult(f); setShowResult(true); }}>
-                  <Text style={styles.recentEmoji}>{f.emoji}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.recentName}>{f.name}</Text>
-                    <Text style={styles.recentCat}>{f.category}</Text>
-                  </View>
-                  <View style={[styles.recentScore, { backgroundColor: v.bg, borderColor: v.border }]}>
-                    <Text style={[styles.recentScoreText, { color: v.text }]}>{f.score}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-        <View style={{ height: 32 }} />
-      </ScrollView>
-
-      {/* Result Modal */}
-      <Modal visible={showResult} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowResult(false)}>
-        {result && (
-          <View style={styles.modal}>
-            <View style={styles.modalHandle} />
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalEmoji}>{result.emoji}</Text>
-                <Text style={styles.modalFoodName}>{result.name}</Text>
-                <Text style={styles.modalCategory}>{result.category}</Text>
-              </View>
-
-              <View style={styles.overallScore}>
-                <View>
-                  <Text style={styles.overallLabel}>PERFORMANCE SCORE</Text>
-                  <Text style={[styles.overallNum, { color: result.score >= 70 ? GREEN : result.score >= 40 ? '#f59e0b' : RED }]}>{result.score}</Text>
-                </View>
-                <View style={[styles.verdictBadge, { backgroundColor: getVerdictStyle(result.verdict).bg, borderColor: getVerdictStyle(result.verdict).border }]}>
-                  <Text style={[styles.verdictText, { color: getVerdictStyle(result.verdict).text }]}>{getVerdictLabel(result.verdict)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.scoresCard}>
-                <ScoreBar label="Blood Flow" value={result.bloodFlow} />
-                <ScoreBar label="Testosterone" value={result.testosterone} />
-                <ScoreBar label="Nitric Oxide" value={result.nitricOxide} max={10} />
-                <ScoreBar label="Stamina" value={result.stamina} />
-                <ScoreBar label="Libido" value={result.libido} />
-                <ScoreBar label="Sperm Health" value={result.spermHealth} />
-                <ScoreBar label="Sugar Level" value={result.sugarLevel} />
-              </View>
-
-              <View style={styles.noteCard}>
-                <Text style={styles.noteTitle}>Why This Matters</Text>
-                <Text style={styles.noteText}>{result.note}</Text>
-              </View>
-
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setShowResult(false)}>
-                <Text style={styles.closeBtnText}>Done</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        )}
-      </Modal>
+    <View style={styles.screen}>
+      <CameraArea
+        activeModeId={activeModeId}
+        onModeChange={setActiveModeId}
+        isScanning={isScanning}
+        onShutterPress={() => simulateScan('watermelon')}
+      />
+      <QuickScanList onSelect={simulateScan} />
     </View>
   );
 }
 
+// ─── Camera area ───────────────────────────────────────────────
+
+function CameraArea({ activeModeId, onModeChange, isScanning, onShutterPress }) {
+  return (
+    <View style={styles.cameraArea}>
+      {/* Header */}
+      <View style={styles.cameraHeader}>
+        <Text style={styles.cameraTitle}>⚡ Alpha Boost</Text>
+        <View style={styles.helpButton}>
+          <Text style={styles.helpButtonText}>?</Text>
+        </View>
+      </View>
+
+      {/* Prompt / scanning state */}
+      {isScanning ? (
+        <View style={styles.scanningState}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.scanningText}>Analysing food...</Text>
+        </View>
+      ) : (
+        <View style={styles.cameraPrompt}>
+          <Text style={styles.cameraHeadline}>Just snap a pic</Text>
+          <Text style={styles.cameraSub}>Get your food's Performance Score in 3 seconds</Text>
+          <Viewfinder />
+        </View>
+      )}
+
+      {/* Scan mode tabs */}
+      <View style={styles.modesRow}>
+        {SCAN_MODES.map((mode) => (
+          <TouchableOpacity
+            key={mode.id}
+            style={[styles.modeTab, activeModeId === mode.id && styles.modeTabActive]}
+            onPress={() => onModeChange(mode.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.modeLabel, activeModeId === mode.id && styles.modeLabelActive]}>
+              {mode.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Shutter button */}
+      <View style={styles.shutterRow}>
+        <TouchableOpacity style={styles.shutterOuter} onPress={onShutterPress} activeOpacity={0.8}>
+          <View style={styles.shutterInner} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function Viewfinder() {
+  return (
+    <View style={styles.viewfinder}>
+      <View style={[styles.corner, styles.cornerTopLeft]} />
+      <View style={[styles.corner, styles.cornerTopRight]} />
+      <View style={[styles.corner, styles.cornerBottomLeft]} />
+      <View style={[styles.corner, styles.cornerBottomRight]} />
+      <Text style={styles.viewfinderIcon}>🍽</Text>
+    </View>
+  );
+}
+
+// ─── Quick scan list ────────────────────────────────────────────
+
+function QuickScanList({ onSelect }) {
+  return (
+    <View style={styles.quickScanSection}>
+      <Text style={styles.quickScanTitle}>Quick scan</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {Object.values(FOODS).map((food) => (
+          <TouchableOpacity
+            key={food.id}
+            style={styles.quickScanItem}
+            onPress={() => onSelect(food.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.quickScanEmoji}>{food.emoji}</Text>
+            <Text style={styles.quickScanName}>{food.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ─── Food result screen ─────────────────────────────────────────
+
+function FoodResultScreen({ food, onScanAnother }) {
+  const verdict = getFoodVerdict(food.score);
+
+  return (
+    <ScrollView style={styles.resultScreen} contentContainerStyle={styles.resultContent}>
+      {/* Hero area with emoji and verdict badge */}
+      <View style={styles.resultHero}>
+        <Text style={styles.resultEmoji}>{food.emoji}</Text>
+        <View style={[styles.verdictPill, { backgroundColor: verdict.bg }]}>
+          <Text style={[styles.verdictLabel, { color: verdict.color }]}>{food.verdict}</Text>
+        </View>
+      </View>
+
+      {/* Result details card */}
+      <View style={styles.resultCard}>
+        {/* Name and score */}
+        <View style={styles.resultHeaderRow}>
+          <View>
+            <Text style={styles.resultFoodName}>{food.name}</Text>
+            <Text style={styles.resultCategory}>{food.category}</Text>
+          </View>
+          <View>
+            <Text style={[styles.resultScoreNumber, { color: verdict.color }]}>{food.score}</Text>
+            <Text style={styles.resultScoreMax}>/ 100</Text>
+          </View>
+        </View>
+
+        {/* Metric bars */}
+        <View style={styles.metricsSection}>
+          <MetricBar label="Blood Flow"   value={food.metrics.bloodFlow}   color={Colors.bloodFlow} />
+          <MetricBar label="Testosterone" value={food.metrics.testosterone} color={Colors.testosterone} />
+          <MetricBar label="Stamina"      value={food.metrics.stamina}      color={Colors.stamina} />
+          <View style={styles.sugarRow}>
+            <Text style={styles.sugarLabel}>Sugar Level</Text>
+            <View style={[styles.sugarChip, { backgroundColor: verdict.bg }]}>
+              <Text style={[styles.sugarValue, { color: verdict.color }]}>{food.sugarLevel}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Science note */}
+        <View style={styles.scienceBox}>
+          <Text style={styles.scienceBoxLabel}>WHY THIS MATTERS</Text>
+          <Text style={styles.scienceBoxText}>{food.reason}</Text>
+          {food.study && <Text style={styles.studyCitation}>Source: {food.study}</Text>}
+        </View>
+
+        {/* Actions */}
+        <TouchableOpacity style={styles.logButton} activeOpacity={0.85}>
+          <Text style={styles.logButtonText}>Log This Food</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.scanAgainButton} onPress={onScanAnother} activeOpacity={0.7}>
+          <Text style={styles.scanAgainText}>Scan Another</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── Styles ────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9' },
-  header: { padding: 24, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 26, fontWeight: '900', color: '#0a0a0a', letterSpacing: -0.5 },
-  headerSub: { fontSize: 14, color: '#6b7280', marginTop: 4 },
-  cameraBox: {
-    margin: 16, height: 240, backgroundColor: '#0a0a0a', borderRadius: 20,
-    justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden',
+  screen: { flex: 1, backgroundColor: Colors.white },
+
+  // Camera
+  cameraArea: { backgroundColor: '#0a0a0a', paddingBottom: Spacing.lg },
+  cameraHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.screenTop,
+    paddingBottom: Spacing.base,
   },
-  cameraBoxScanning: { backgroundColor: '#0d1f12' },
-  cameraPrompt: { alignItems: 'center' },
-  cameraIcon: { fontSize: 48, marginBottom: 12 },
-  cameraText: { fontSize: 18, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  cameraSub: { fontSize: 13, color: '#9ca3af' },
-  scanningIndicator: { alignItems: 'center' },
-  scanningText: { fontSize: 16, fontWeight: '700', color: GREEN, marginBottom: 6, marginTop: 8 },
-  scanningSubText: { fontSize: 12, color: '#6b7280', textAlign: 'center', maxWidth: 220 },
-  cornerTL: { position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTopWidth: 2.5, borderLeftWidth: 2.5, borderColor: GREEN, borderRadius: 3 },
-  cornerTR: { position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTopWidth: 2.5, borderRightWidth: 2.5, borderColor: GREEN, borderRadius: 3 },
-  cornerBL: { position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottomWidth: 2.5, borderLeftWidth: 2.5, borderColor: GREEN, borderRadius: 3 },
-  cornerBR: { position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottomWidth: 2.5, borderRightWidth: 2.5, borderColor: GREEN, borderRadius: 3 },
-  orText: { textAlign: 'center', fontSize: 12, color: '#9ca3af', marginVertical: 8, fontWeight: '500' },
-  foodChips: { paddingHorizontal: 16, gap: 10, paddingBottom: 8 },
-  foodChip: { backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#e5e7eb', minWidth: 80 },
-  foodChipEmoji: { fontSize: 24, marginBottom: 6 },
-  foodChipName: { fontSize: 11, fontWeight: '600', color: '#374151', textAlign: 'center' },
-  recentSection: { margin: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#0a0a0a', marginBottom: 12 },
-  recentItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: '#e5e7eb', gap: 12 },
-  recentEmoji: { fontSize: 28 },
-  recentName: { fontSize: 14, fontWeight: '700', color: '#0a0a0a' },
-  recentCat: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  recentScore: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5 },
-  recentScoreText: { fontSize: 16, fontWeight: '900' },
-  modal: { flex: 1, backgroundColor: '#fff', padding: 24, paddingTop: 12 },
-  modalHandle: { width: 36, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalHeader: { alignItems: 'center', marginBottom: 20 },
-  modalEmoji: { fontSize: 56, marginBottom: 8 },
-  modalFoodName: { fontSize: 26, fontWeight: '900', color: '#0a0a0a', letterSpacing: -0.5, textAlign: 'center' },
-  modalCategory: { fontSize: 12, color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
-  overallScore: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1.5, borderColor: '#e5e7eb' },
-  overallLabel: { fontSize: 10, color: '#9ca3af', fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 },
-  overallNum: { fontSize: 52, fontWeight: '900', letterSpacing: -1.5 },
-  verdictBadge: { padding: 12, borderRadius: 12, borderWidth: 1.5 },
-  verdictText: { fontSize: 14, fontWeight: '800' },
-  scoresCard: { backgroundColor: '#f9f9f9', borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1.5, borderColor: '#e5e7eb', gap: 12 },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  scoreLabel: { fontSize: 12, color: '#374151', fontWeight: '500', width: 100 },
-  scoreBarWrap: { flex: 1, height: 7, backgroundColor: '#e5e7eb', borderRadius: 3, overflow: 'hidden' },
-  scoreBar: { height: '100%', borderRadius: 3 },
-  scoreVal: { fontSize: 12, fontWeight: '700', width: 36, textAlign: 'right' },
-  noteCard: { backgroundColor: '#f0fdf4', borderRadius: 16, padding: 18, marginBottom: 20, borderWidth: 1.5, borderColor: '#bbf7d0' },
-  noteTitle: { fontSize: 14, fontWeight: '800', color: '#14532d', marginBottom: 8 },
-  noteText: { fontSize: 14, color: '#166534', lineHeight: 21 },
-  closeBtn: { backgroundColor: '#0a0a0a', padding: 16, borderRadius: 14, marginBottom: 20 },
-  closeBtnText: { color: '#fff', fontWeight: '800', textAlign: 'center', fontSize: 15 },
+  cameraTitle: { fontSize: Typography.xl, fontWeight: Typography.black, color: Colors.white },
+  helpButton: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: '#374151', alignItems: 'center', justifyContent: 'center' },
+  helpButtonText: { color: '#9ca3af', fontWeight: Typography.bold, fontSize: 13 },
+  cameraPrompt: { alignItems: 'center', paddingVertical: Spacing.lg, paddingHorizontal: Spacing.lg },
+  cameraHeadline: { fontSize: 28, fontWeight: Typography.black, color: Colors.white, letterSpacing: -0.5, marginBottom: Spacing.xs },
+  cameraSub: { fontSize: Typography.base, color: '#9ca3af', textAlign: 'center', marginBottom: Spacing.lg },
+  scanningState: { alignItems: 'center', paddingVertical: 60, gap: Spacing.base },
+  scanningText: { fontSize: Typography.md, color: '#9ca3af', fontWeight: Typography.semiBold },
+
+  // Viewfinder
+  viewfinder: { width: 200, height: 200, position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: Colors.primary, borderStyle: 'solid' },
+  cornerTopLeft:     { top: 0, left: 0,     borderTopWidth: 3,    borderLeftWidth: 3   },
+  cornerTopRight:    { top: 0, right: 0,    borderTopWidth: 3,    borderRightWidth: 3  },
+  cornerBottomLeft:  { bottom: 0, left: 0,  borderBottomWidth: 3, borderLeftWidth: 3   },
+  cornerBottomRight: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3  },
+  viewfinderIcon: { fontSize: 64, opacity: 0.25 },
+
+  // Scan modes
+  modesRow: { flexDirection: 'row', paddingHorizontal: Spacing.lg, gap: Spacing.sm, marginBottom: Spacing.base },
+  modeTab: { flex: 1, paddingVertical: Spacing.sm, borderRadius: Radius.sm, backgroundColor: '#1f2937', alignItems: 'center' },
+  modeTabActive: { backgroundColor: Colors.primary },
+  modeLabel: { fontSize: Typography.xs, color: '#9ca3af', fontWeight: Typography.bold },
+  modeLabelActive: { color: Colors.white },
+
+  // Shutter
+  shutterRow: { alignItems: 'center', paddingBottom: Spacing.sm },
+  shutterOuter: { width: 68, height: 68, borderRadius: 34, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center' },
+  shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#f3f4f6', borderWidth: 2, borderColor: '#d1d5db' },
+
+  // Quick scan
+  quickScanSection: { padding: Spacing.base },
+  quickScanTitle: { fontSize: Typography.md, fontWeight: Typography.extraBold, color: Colors.black, marginBottom: Spacing.md },
+  quickScanItem: { alignItems: 'center', marginRight: Spacing.md, backgroundColor: Colors.lightGrey, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1.5, borderColor: Colors.border, minWidth: 72 },
+  quickScanEmoji: { fontSize: 28, marginBottom: Spacing.xs },
+  quickScanName: { fontSize: Typography.xs, color: Colors.grey, fontWeight: Typography.semiBold, textAlign: 'center' },
+
+  // Result
+  resultScreen: { flex: 1, backgroundColor: Colors.white },
+  resultContent: { paddingBottom: 100 },
+  resultHero: { backgroundColor: '#0a0a0a', alignItems: 'center', paddingTop: Spacing.screenTop, paddingBottom: Spacing['2xl'] },
+  resultEmoji: { fontSize: 80, marginBottom: Spacing.base },
+  verdictPill: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.pill },
+  verdictLabel: { fontSize: Typography.base, fontWeight: Typography.black, letterSpacing: 2 },
+  resultCard: { backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -16, padding: Spacing.xl },
+  resultHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.lg },
+  resultFoodName: { fontSize: Typography['2xl'], fontWeight: Typography.black, color: Colors.black, letterSpacing: -0.5 },
+  resultCategory: { fontSize: 13, color: Colors.grey, marginTop: 3 },
+  resultScoreNumber: { fontSize: Typography['4xl'], fontWeight: Typography.black, letterSpacing: -1 },
+  resultScoreMax: { fontSize: Typography.sm, color: Colors.grey, textAlign: 'center' },
+  metricsSection: { marginBottom: Spacing.lg },
+  sugarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
+  sugarLabel: { width: 100, fontSize: Typography.sm, color: Colors.grey, fontWeight: Typography.semiBold },
+  sugarChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.pill },
+  sugarValue: { fontSize: Typography.xs, fontWeight: Typography.bold },
+  scienceBox: { backgroundColor: '#f0fdf4', borderRadius: Radius.lg, padding: Spacing.base, marginBottom: Spacing.base, borderWidth: 1.5, borderColor: Colors.primaryBorder },
+  scienceBoxLabel: { fontSize: Typography.xs, fontWeight: Typography.extraBold, color: Colors.primary, letterSpacing: 1.5, marginBottom: Spacing.xs },
+  scienceBoxText: { fontSize: 13, color: '#166534', lineHeight: 20 },
+  studyCitation: { fontSize: Typography.xs, color: '#6b7280', marginTop: Spacing.sm, fontStyle: 'italic' },
+  logButton: { backgroundColor: Colors.black, borderRadius: Radius.lg, padding: Spacing.base, alignItems: 'center', marginBottom: Spacing.sm },
+  logButtonText: { color: Colors.white, fontWeight: Typography.extraBold, fontSize: Typography.md },
+  scanAgainButton: { borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'center' },
+  scanAgainText: { color: Colors.grey, fontWeight: Typography.bold, fontSize: Typography.base },
 });
